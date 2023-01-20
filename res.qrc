@@ -1,0 +1,23 @@
+<RCC>
+    <qresource prefix="/">
+        <file>ico/folder-open.svg</file>
+        <file>ico/music_last.svg</file>
+        <file>ico/music_next.svg</file>
+        <file>ico/order-play-fill.svg</file>
+        <file>ico/Player, pause.svg</file>
+        <file>ico/Player, play.svg</file>
+        <file>ico/player-list-add.svg</file>
+        <file>ico/queue_music.svg</file>
+        <file>ico/repeat.svg</file>
+        <file>ico/repeat-one-line.svg</file>
+        <file>ico/volume.svg</file>
+        <file>ico/random.svg</file>
+        <file>ico/noVolume.svg</file>
+        <file>ico/close.svg</file>
+        <file>ico/max.svg</file>
+        <file>ico/min.svg</file>
+        <file>ico/Max2normal.svg</file>
+        <file>ico/MusicPlayer.ico</file>
+        <file>ico/search.svg</file>
+    </qresource>
+</RCC>
