@@ -11,10 +11,12 @@ CONFIG += c++17
 SOURCES += \
     customslider.cpp \
     main.cpp \
+    music.cpp \
     musicplayer.cpp
 
 HEADERS += \
     customslider.h \
+    music.h \
     musicplayer.h
 
 FORMS += \
