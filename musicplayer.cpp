@@ -10,6 +10,7 @@
 #include <QAction>
 #include <QMenu>
 #include <QtNetwork>
+#include <iterator>
 
 
 MusicPlayer::MusicPlayer(QWidget *parent)
@@ -110,6 +111,8 @@ void MusicPlayer::initPlayer()
     network_request = new QNetworkRequest();
     network_manager = new QNetworkAccessManager(this);
 
+    ui->listWidget_2->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+
     // 初始化搜索结果列表头
     ui->tableWidget->setColumnCount(4);
     QStringList strList;//设置水平表头
@@ -127,12 +130,15 @@ void MusicPlayer::initPlayer()
 // 连接信号和槽
 void MusicPlayer::connectSignalsAndSlots()
 {
-    // 连接信号和槽，更新播放时长和进度条
+    // 连接信号和槽，更新播放时长和进度条和歌词滚动
     connect(mediaPlayer,&QMediaPlayer::positionChanged,this,&MusicPlayer::updatePosition);
     connect(mediaPlayer,&QMediaPlayer::durationChanged,this,&MusicPlayer::updateDuration);
+    connect(mediaPlayer,&QMediaPlayer::positionChanged,this,&MusicPlayer::updateCenterLrc);
+//    connect(mediaPlayer,&QMediaPlayer::durationChanged,this,&MusicPlayer::updateCenterLrc);
     connect(ui->horizontalSlider,&CustomSlider::customSliderClicked,this,&MusicPlayer::sliderClicked);
     // 处理请求回复
     connect(network_manager, &QNetworkAccessManager::finished, this, &MusicPlayer::replyFinished);
+    // 按Enter键搜索
     connect(ui->lineEdit_search, &QLineEdit::returnPressed, this, &MusicPlayer::on_pushButton_search_clicked);
 }
 
@@ -157,12 +163,16 @@ void MusicPlayer::replyFinished(QNetworkReply *reply)
         reply->deleteLater();   // 删除replay对象
 //        QString result(jsonBytes);  //转化为字符串
 //        qDebug()<<result;
+        // 根据请求类型选中json解析函数
         switch (replyType) {
         case ReplyType::ID:
-            parseJsonForInfo(jsonBytes);//解析api接口返回的json， 获取歌曲ID
+            parseJsonForInfo(jsonBytes);//解析api接口返回的json， 获取歌曲信息
             break;
         case ReplyType::URL:
-            parseJsonForUrl(jsonBytes);
+            parseJsonForUrl(jsonBytes);//解析api接口返回的json， 获取歌曲URL
+            break;
+        case ReplyType::LRC:
+            parseJsonForLrc(jsonBytes);//解析api接口返回的json， 获取歌词
             break;
         default:
             break;
@@ -172,7 +182,7 @@ void MusicPlayer::replyFinished(QNetworkReply *reply)
     {
         reply->deleteLater();
         //处理错误
-        qDebug()<<"搜索失败";
+        qDebug()<<tr("搜索失败");
     }
 }
 
@@ -219,9 +229,19 @@ void MusicPlayer::searchForUrl()
     network_manager->get(*network_request);
 }
 
+// 获取歌词、json格式
+void MusicPlayer::searchForLrc()
+{
+    replyType = ReplyType::LRC;
+    // 搜索歌曲，获取歌词
+    QString searchByLrc = QString("https://netease.haohao666.top/lyric?id=%1").arg(id);
+    network_request->setUrl(QUrl(searchByLrc));
+    network_manager->get(*network_request);
+}
+
 // 解析json，获取歌曲Url
 void MusicPlayer::parseJsonForUrl(QByteArray jsonBytes)
-{
+{  
     QJsonParseError json_error; // 错误信息
     // 将json解析未编码未UTF-8的json文档
     QJsonDocument parse_doucment = QJsonDocument::fromJson(jsonBytes, &json_error);
@@ -252,6 +272,80 @@ void MusicPlayer::parseJsonForUrl(QByteArray jsonBytes)
     ui->pushButton_switch->setToolTip(tr("暂停"));
 }
 
+// 解析json，获取歌词
+void MusicPlayer::parseJsonForLrc(QByteArray jsonBytes)
+{
+    QJsonParseError json_error; // 错误信息
+    // 将json解析未编码未UTF-8的json文档
+    QJsonDocument parse_doucment = QJsonDocument::fromJson(jsonBytes, &json_error);
+    // 错误处理
+    if (json_error.error != QJsonParseError::NoError) {
+        qDebug() << json_error.errorString();
+        return;
+    }
+    // 获取歌词
+    QString lrcs = parse_doucment.object().value("lrc").toObject().value("lyric").toString();
+    QStringList lrcList = lrcs.split("\n");
+
+    lrcMap.clear();
+    for (int i = 0; i < lrcList.size(); i++) {
+        QString str = lrcList.at(i);
+        QString lrc = str.remove(QRegExp("\\s"));
+        //时间解析格式(分*60+秒)*100+厘秒
+        qint64 min = lrc.midRef(1, 2).toInt();      //分
+        qint64 sec = lrc.midRef(4, 2).toInt();      //秒
+        qint64 msec = lrc.midRef(7, 2).toInt();      //毫秒
+        qint64 lrcTime = (min * 60 + sec) * 1000 + msec;
+        QString lrcStr = lrc.mid(lrc.lastIndexOf("]") + 1);
+        //用Qmap来保存 时间和单行歌词
+        lrcMap.insert(lrcTime, lrcStr);
+//        qDebug()<<lrcTime<<lrcStr;
+    }
+    showLrc();
+}
+
+// 歌词滚动
+void MusicPlayer::updateCenterLrc(qint64 position)
+{
+    if (!isLrc) {
+        return;
+    }
+    int row = 0;
+    QMap<qint64, QString>::iterator iter = lrcMap.begin() + 1;
+
+    for (;iter != lrcMap.end(); iter++) {
+
+        if (iter.key() >= position) {
+            if (row == currentLrcRow) {
+                return;
+            }
+            currentLrcRow = row;
+            qDebug()<<row;
+            QListWidgetItem *item = ui->listWidget_2->item(--row);
+            ui->listWidget_2->setCurrentItem(item);
+            // 滚动到当前歌词
+            ui->listWidget_2->scrollToItem(item, QAbstractItemView::PositionAtCenter);
+            return;
+        }
+        row++;
+    }
+
+}
+
+// 显示歌词
+void MusicPlayer::showLrc()
+{
+    ui->listWidget_2->clear();
+
+    QMap<qint64, QString>::iterator iter = lrcMap.begin() + 1;
+    for (;iter != lrcMap.end(); iter++) {
+        QListWidgetItem *item = new QListWidgetItem(iter.value());
+        item->setTextAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+        ui->listWidget_2->addItem(item);
+    }
+    isLrc = true;
+}
+
 // 向搜索列表添加搜索结果
 void MusicPlayer::initTableList()
 {
@@ -264,7 +358,7 @@ void MusicPlayer::initTableList()
     for (int i = 0; i < musicList.size(); i++) {
         // 获取搜索列表列表行数
         int currentRow = ui->tableWidget->rowCount();
-//        qDebug()<<currentRow;
+
         // 往后插入一行
         ui->tableWidget->insertRow(currentRow);
         // 新建列表项
@@ -373,16 +467,6 @@ void MusicPlayer::on_pushButton_openFile_clicked()
 // 上一首
 void MusicPlayer::on_pushButton_lastSong_clicked()
 {
-//    switch (playlistType) {
-//    case PlaylistType::ONLINE:
-//        playList = playListOnline;
-//        break;
-//    case PlaylistType::LOCAL:
-//        playList = playListLocal;
-//        break;
-//    default:
-//        break;
-//    }
     // 根据播放列表类型，切换播放列表
     if (PlaylistType::ONLINE == playlistType && playList!=playListOnline) {
         playList = playListOnline;
@@ -396,7 +480,8 @@ void MusicPlayer::on_pushButton_lastSong_clicked()
     if (playList->isEmpty()) {
         return;
     }
-//    mediaPlayer->setPlaylist(playList);
+    id = songList.at(playList->previousIndex()).getId();
+
     playList->setCurrentIndex(playList->previousIndex());
 
     mediaPlayer->play();//播放歌曲
@@ -420,19 +505,6 @@ void MusicPlayer::on_pushButton_switch_clicked()
 // 下一首
 void MusicPlayer::on_pushButton_nextSong_clicked()
 {
-//    if (!isCanPlay) {
-//        return;
-//    }
-//    switch (playlistType) {
-//    case PlaylistType::ONLINE:
-//        playList = playListOnline;
-//        break;
-//    case PlaylistType::LOCAL:
-//        playList = playListLocal;
-//        break;
-//    default:
-//        break;
-//    }
     // 根据播放列表类型，改变播放列表
     if (PlaylistType::ONLINE == playlistType && playList!=playListOnline) {
         playList = playListOnline;
@@ -446,7 +518,7 @@ void MusicPlayer::on_pushButton_nextSong_clicked()
     if (playList->isEmpty()) {
         return;
     }
-//    mediaPlayer->setPlaylist(playList);
+    id = songList.at(playList->nextIndex()).getId();
     playList->setCurrentIndex(playList->nextIndex());
     mediaPlayer->play();//播放歌曲
     ui->pushButton_switch->setIcon(QIcon(QPixmap(":/ico/Player, pause.svg")));
@@ -540,9 +612,10 @@ void MusicPlayer::on_listWidget_itemDoubleClicked(QListWidgetItem *item)
 // 更新播放总时长和正在播放歌曲信息
 void MusicPlayer::updateDuration(qint64 duration)
 {
+    searchForLrc();//歌词搜索
     ui->horizontalSlider->setRange(0, duration);//根据播放时长来设置滑块的范围
     ui->horizontalSlider->setEnabled(duration>0);
-    ui->horizontalSlider->setSingleStep(1);
+    ui->horizontalSlider->setSingleStep(100);
     ui->horizontalSlider->setPageStep(duration/20);//以及每一步的步数
 
     QTime displayTime(0, (duration/60000) % 60,(duration/1000) % 60);
@@ -626,12 +699,13 @@ void MusicPlayer::on_pushButton_search_clicked()
 void MusicPlayer::on_tableWidget_itemDoubleClicked(QTableWidgetItem *item)
 {
     int currentRow = item->row();
-//    qDebug()<<item->row();
+
     id = musicList.at(currentRow).getId(); // 获取当前双击歌曲的ID
-//    qDebug()<<id;
+    songList.push_front(musicList.at(currentRow));
     // 获取在线音乐歌曲的名称列表
     musicNameListOnline.push_front(musicList.at(item->row()).getSongName().append("-").append(musicList.at(item->row()).getAuthor()));
     searchForUrl();   // 获取歌曲URl
+
     // 在列表最前插入一行
     ui->tableWidget_2->insertRow(0);
     // 新建列表项
@@ -651,11 +725,13 @@ void MusicPlayer::on_tableWidget_itemDoubleClicked(QTableWidgetItem *item)
     ui->tableWidget_2->setItem(0, 1, itemAuthor);
     ui->tableWidget_2->setItem(0, 2, itemAlbum);
     ui->tableWidget_2->setItem(0, 3, itemDuration);
+
 }
 
 // 双击播放列表项，播放歌曲
 void MusicPlayer::on_tableWidget_2_itemDoubleClicked(QTableWidgetItem *item)
 {
+    isLrc = false;
     int itemRow = item->row();// 双击项的行号
 
     // 改变播放列表，换为在线音乐播放列表
@@ -675,4 +751,7 @@ void MusicPlayer::on_tableWidget_2_itemDoubleClicked(QTableWidgetItem *item)
     ui->pushButton_switch->setIcon(QIcon(QPixmap(":/ico/Player, pause.svg")));
     ui->pushButton_switch->setToolTip(tr("暂停"));
 }
+
+
+
 

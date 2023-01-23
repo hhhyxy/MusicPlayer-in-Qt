@@ -5,7 +5,8 @@ Music::Music(int id, QString songName, QString author, QString album, int songDu
     m_songName(songName),
     m_author(author),
     m_album(album),
-    m_songDuration(songDuration)
+    m_songDuration(songDuration),
+    m_songUrl(songUrl)
 {
 
 

@@ -26,7 +26,8 @@ QT_END_NAMESPACE
 
 enum ReplyType {
     ID,
-    URL
+    URL,
+    LRC
 };
 enum PlaylistType {
     ONLINE,
@@ -86,21 +87,29 @@ private slots:
 
     void on_tableWidget_2_itemDoubleClicked(QTableWidgetItem *item);
 
+    void updateCenterLrc(qint64 position);
+
+
+
+
+//    void on_tabWidget_tabBarClicked(int index);
+
 private:
     Ui::MusicPlayer *ui;
 
     int playlistType;
     QMediaPlaylist *playList; //播放列表
     QMediaPlaylist *playListLocal;  // 本地音乐播放列表
-    QMediaPlaylist *playListOnline;  // 本地音乐播放列表
+    QMediaPlaylist *playListOnline;  // 在线音乐播放列表
     QMediaPlayer  *mediaPlayer; //播放器
     QStringList musicNameList;  // 音乐名称列表
     QStringList musicNameListLocal;  // 本地音乐名称列表
     QStringList musicNameListOnline;  // 本地音乐名称列表
 
 //    bool isCanPlay; // 是否能播放
+    bool isLrc = false;
     int volume; // 音量
-
+    int currentLrcRow = 0;
     QPoint m_mousePoint;    // 鼠标坐标
     QPoint movePoint;   // 窗口移动距离
     bool mousePress;    // 鼠标左键是否按下
@@ -114,20 +123,29 @@ private:
     QString album;  // 专辑
     QString songUrl;    // 歌曲链接
     int songDuration;   // 歌曲时长
-    QList<Music> musicList;    // 音乐列表
-    int replyType;
+    QMap<qint64,QString> lrcMap;   // 歌词
+    QList<Music> musicList;    // 搜索结果音乐列表
+    QList<Music> songList;  // 播放列表音乐列表
+    int replyType;  // 回应类型
     bool isSearchFinished;  // 搜索完成
 
 
     void setTrayIcon(); // 设置托盘图标
     void initPlayer();  // 初始化播放器
     void connectSignalsAndSlots();  // 连接信号和槽
-    void searchForInfo(QString str);  // 通过搜索获取含歌曲ID的Json
-    void parseJsonForInfo(QByteArray jsonBytes);  // 解析Json获取歌曲信息
-    void searchForUrl();
-    void parseJsonForUrl(QByteArray jsonBytes);
+    void initTableList();   // 初始化搜索结果列表
 
-    void initTableList();
+    void searchForInfo(QString str);  // 通过搜索获取含歌曲ID的Json
+    void searchForUrl();    // 歌曲Url搜索、获取json
+    void searchForLrc();    // 歌词搜索、获取json
+
+    void parseJsonForInfo(QByteArray jsonBytes);  // 解析Json获取歌曲信息
+    void parseJsonForUrl(QByteArray jsonBytes); // 解析Json获取歌曲Url
+    void parseJsonForLrc(QByteArray jsonBytes); // 解析Json获取歌词
+    void showLrc();
+
+
+
 
 
 };

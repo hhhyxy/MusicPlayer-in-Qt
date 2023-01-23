@@ -26,8 +26,9 @@ private:
     QString m_songName; // 歌曲名称
     QString m_author; // 歌手
     QString m_album;  // 专辑
-    QString m_songUrl;    // 歌曲链接
     int m_songDuration;   // 歌曲时长
+    QString m_songUrl;    // 歌曲链接
+
 };
 
 #endif // MUSIC_H
